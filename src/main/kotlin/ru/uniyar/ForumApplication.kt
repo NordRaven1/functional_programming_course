@@ -44,6 +44,7 @@ import ru.uniyar.web.handlers.EditThemeHandler
 import ru.uniyar.web.handlers.EditUserHandler
 import ru.uniyar.web.handlers.LogoutHandler
 import ru.uniyar.web.handlers.MessageListHandler
+import ru.uniyar.web.handlers.MutableRef
 import ru.uniyar.web.handlers.RegisterNewUserHandler
 import ru.uniyar.web.handlers.ShowAppInfoHandler
 import ru.uniyar.web.handlers.ShowAuthPageHandler
@@ -62,6 +63,7 @@ import ru.uniyar.web.handlers.ShowNewThemeFormHandler
 import ru.uniyar.web.handlers.ShowRegistrationPageHandler
 import ru.uniyar.web.handlers.ThemesListHandler
 import ru.uniyar.web.handlers.UserListHandler
+import ru.uniyar.web.handlers.wrapStatefulHandler
 import ru.uniyar.web.templates.ContextAwarePebbleTemplates
 import ru.uniyar.web.templates.ContextAwareViewRender
 import kotlin.concurrent.thread
@@ -69,54 +71,82 @@ import kotlin.system.exitProcess
 
 fun router(
     lens: ContextAwareViewRender,
-    themes: Themes,
-    users: Users,
+    themesRef: MutableRef<Themes>,
+    usersRef: MutableRef<Users>,
     jwtTools: JwtTools,
     permissionLens: RequestContextLens<Permissions>,
     sharedStateLens: RequestContextLens<SharedState?>,
 ) = routes(
     "/" bind GET to ShowAppInfoHandler(lens),
     "/login" bind GET to ShowAuthPageHandler(WebForm(), lens, permissionLens),
-    "/login" bind POST to AuthorizationHandler(users, jwtTools, lens),
+    "/login" bind POST to { request ->
+        AuthorizationHandler(usersRef.value, jwtTools, lens).invoke(request)
+    },
     "/logout" bind GET to LogoutHandler(),
     "/users/new" bind GET to ShowRegistrationPageHandler(WebForm(), lens, permissionLens),
-    "/users/new" bind POST to RegisterNewUserHandler(users, lens),
-    "/users/{userId}" bind GET to ShowEditUserPageHandler(users, lens, permissionLens),
-    "/users/{userId}" bind POST to EditUserHandler(users, lens),
-    "/users/{userId}/permissions" bind GET to ShowEditPermissionsFormHandler(users, lens, permissionLens),
-    "/users/{userId}/permissions" bind POST to EditPermissionsHandler(users, lens),
-    "/users/{userId}/password" bind GET to ShowEditPasswordHandler(users, WebForm(), lens, permissionLens),
-    "/users/{userId}/password" bind POST to EditPasswordHandler(users, lens),
-    "/users/{userId}/ban" bind GET to BanUserHandler(users, lens, permissionLens),
-    "/users" bind GET to UserListHandler(users, lens, permissionLens),
+    "/users/new" bind POST to wrapStatefulHandler(RegisterNewUserHandler(lens), themesRef, usersRef),
+    "/users/{userId}" bind GET to { request ->
+        ShowEditUserPageHandler(usersRef.value, lens, permissionLens).invoke(request)
+    },
+    "/users/{userId}" bind POST to wrapStatefulHandler(EditUserHandler(lens), themesRef, usersRef),
+    "/users/{userId}/permissions" bind GET to { request ->
+        ShowEditPermissionsFormHandler(usersRef.value, lens, permissionLens).invoke(request)
+    },
+    "/users/{userId}/permissions" bind POST to wrapStatefulHandler(EditPermissionsHandler(lens), themesRef, usersRef),
+    "/users/{userId}/password" bind GET to { request ->
+        ShowEditPasswordHandler(usersRef.value, WebForm(), lens, permissionLens).invoke(request)
+    },
+    "/users/{userId}/password" bind POST to wrapStatefulHandler(EditPasswordHandler(lens), themesRef, usersRef),
+    "/users/{userId}/ban" bind GET to wrapStatefulHandler(BanUserHandler(lens, permissionLens), themesRef, usersRef),
+    "/users" bind GET to { request ->
+        UserListHandler(usersRef.value, lens, permissionLens).invoke(request)
+    },
     "/themes/new" bind GET to ShowNewThemeFormHandler(WebForm(), lens, permissionLens),
-    "/themes/new" bind POST to CreateNewThemeHandler(users, themes, lens, sharedStateLens),
-    "/themes" bind GET to ThemesListHandler(users, themes::getThemesPerPage, lens),
-    "/themes/theme/{themeId}/new" bind GET to ShowNewMessageFormHandler(themes, WebForm(), lens, permissionLens),
-    "/themes/theme/{themeId}/new" bind POST to CreateNewMessageHandler(users, themes, lens, sharedStateLens),
-    "/themes/theme/{themeId}/edit" bind GET to
-        ShowEditThemeFormHandler(themes::fetchThemeByNumber, lens, permissionLens, sharedStateLens),
-    "/themes/theme/{themeId}/edit" bind POST to EditThemeHandler(users, themes, lens),
-    "/themes/theme/{themeId}/delete" bind GET to
-        ShowDeleteThemeFormHandler(users, themes::fetchThemeByNumber, lens, permissionLens, sharedStateLens),
-    "/themes/theme/{themeId}/delete" bind POST to DeleteThemeHandler(users, themes, lens),
-    "/themes/theme/{themeId}" bind GET to MessageListHandler(users, themes::fetchThemeByNumber, lens),
-    "/themes/theme/{themeId}/message/{mesId}/newReaction" bind GET to
-        ShowNewReactionFormHandler(themes, WebForm(), lens, permissionLens),
+    "/themes/new" bind POST to wrapStatefulHandler(CreateNewThemeHandler(lens, sharedStateLens), themesRef, usersRef),
+    "/themes" bind GET to { request ->
+        ThemesListHandler(lens, themesRef.value, usersRef.value).invoke(request)
+    },
+    "/themes/theme/{themeId}/new" bind GET to { request ->
+        ShowNewMessageFormHandler(themesRef.value, WebForm(), lens, permissionLens).invoke(request)
+    },
+    "/themes/theme/{themeId}/new" bind POST to wrapStatefulHandler(CreateNewMessageHandler(lens, sharedStateLens), themesRef, usersRef),
+    "/themes/theme/{themeId}/edit" bind GET to { request ->
+        ShowEditThemeFormHandler(themesRef.value::fetchThemeByNumber, lens, permissionLens, sharedStateLens).invoke(request)
+    },
+    "/themes/theme/{themeId}/edit" bind POST to wrapStatefulHandler(EditThemeHandler(lens), themesRef, usersRef),
+    "/themes/theme/{themeId}/delete" bind GET to { request ->
+        ShowDeleteThemeFormHandler(
+            usersRef.value, themesRef.value::fetchThemeByNumber, lens, permissionLens,
+            sharedStateLens,
+        ).invoke(request)
+    },
+    "/themes/theme/{themeId}/delete" bind POST to wrapStatefulHandler(DeleteThemeHandler(lens), themesRef, usersRef),
+    "/themes/theme/{themeId}" bind GET to { request ->
+        MessageListHandler(usersRef.value, themesRef.value::fetchThemeByNumber, lens).invoke(request)
+    },
+    "/themes/theme/{themeId}/message/{mesId}/newReaction" bind GET to { request ->
+        ShowNewReactionFormHandler(themesRef.value, WebForm(), lens, permissionLens).invoke(request)
+    },
     "/themes/theme/{themeId}/message/{mesId}/newReaction" bind POST to
-        CreateNewReactionHandler(users, themes, lens, sharedStateLens),
-    "/themes/theme/{themeId}/message/{mesId}/delete" bind GET to
-        ShowDeleteMessageFormHandler(users, themes, lens, permissionLens, sharedStateLens),
-    "/themes/theme/{themeId}/message/{mesId}/delete" bind POST to DeleteMessageHandler(users, themes, lens),
-    "/themes/theme/{themeId}/message/{mesId}/edit" bind GET to
-        ShowEditMessageFormHandler(themes, lens, permissionLens, sharedStateLens),
+        wrapStatefulHandler(CreateNewReactionHandler(lens, sharedStateLens), themesRef, usersRef),
+    "/themes/theme/{themeId}/message/{mesId}/delete" bind GET to { request ->
+        ShowDeleteMessageFormHandler(usersRef.value, themesRef.value, lens, permissionLens, sharedStateLens).invoke(request)
+    },
+    "/themes/theme/{themeId}/message/{mesId}/delete" bind POST to wrapStatefulHandler(DeleteMessageHandler(lens), themesRef, usersRef),
+    "/themes/theme/{themeId}/message/{mesId}/edit" bind GET to { request ->
+        ShowEditMessageFormHandler(themesRef.value, lens, permissionLens, sharedStateLens).invoke(request)
+    },
     "/themes/theme/{themeId}/message/{mesId}/edit" bind POST to
-        EditMessageHandler(users, themes, lens),
+        wrapStatefulHandler(EditMessageHandler(lens), themesRef, usersRef),
     "/themes/theme/{themeId}/message/{mesId}/deleteReaction/{reactNum}"
-        bind GET to ShowDeleteReactionFormHandler(users, themes, lens, permissionLens, sharedStateLens),
+        bind GET to { request ->
+            ShowDeleteReactionFormHandler(usersRef.value, themesRef.value, lens, permissionLens, sharedStateLens).invoke(request)
+        },
     "/themes/theme/{themeId}/message/{mesId}/deleteReaction/{reactNum}"
-        bind POST to DeleteReactionHandler(users, themes, lens),
-    "/themes/theme/{themeId}/message/{mesId}" bind GET to ShowMessageHandler(users, themes, lens),
+        bind POST to wrapStatefulHandler(DeleteReactionHandler(lens), themesRef, usersRef),
+    "/themes/theme/{themeId}/message/{mesId}" bind GET to { request ->
+        ShowMessageHandler(usersRef.value, themesRef.value, lens).invoke(request)
+    },
     static(ResourceLoader.Classpath("/ru/uniyar/public")),
 )
 
@@ -129,8 +159,8 @@ fun main() {
         exitProcess(0)
     }
 
-    val themes = Themes(loadFromFileThemes())
-    val users = Users(loadFromFileUsers())
+    val themesRef = MutableRef(Themes(loadFromFileThemes()))
+    val usersRef = MutableRef(Users(loadFromFileUsers()))
 
     val renderer = ContextAwarePebbleTemplates().hotReload("src/main/resources")
     val htmlView = ContextAwareViewRender.withContentType(renderer, ContentType.TEXT_HTML)
@@ -148,10 +178,10 @@ fun main() {
 
     val app =
         ServerFilters.InitialiseRequestContext(contexts)
-            .then(addStateFilter(users, jwtTools, sharedStateLens))
-            .then(permissionFilter(users, sharedStateLens, permissionLens))
+            .then(addStateFilter(usersRef, jwtTools, sharedStateLens))
+            .then(permissionFilter(usersRef, sharedStateLens, permissionLens))
             .then(errorFilter(htmlViewWithContext))
-            .then(router(htmlViewWithContext, themes, users, jwtTools, permissionLens, sharedStateLens))
+            .then(router(htmlViewWithContext, themesRef, usersRef, jwtTools, permissionLens, sharedStateLens))
 
     val printingApp: HttpHandler = Filter.NoOp.then(app)
     val server = printingApp.asServer(Netty(portConfig.webPort)).start()
@@ -160,8 +190,8 @@ fun main() {
 
     val hook =
         thread(start = false) {
-            saveToFileThemes(themes)
-            saveToFileUsers(users)
+            saveToFileThemes(themesRef.value)
+            saveToFileUsers(usersRef.value)
         }
     Runtime.getRuntime().addShutdownHook(hook)
     println("Press enter to stop the application.")

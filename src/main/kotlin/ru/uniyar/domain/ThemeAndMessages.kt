@@ -1,3 +1,3 @@
 package ru.uniyar.domain
 
-class ThemeAndMessages(val theme: Theme, val messages: Messages)
+data class ThemeAndMessages(val theme: Theme, val messages: Messages)

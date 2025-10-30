@@ -1,25 +1,53 @@
 package ru.uniyar.domain
+import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
 import ru.uniyar.formTodaysDate
-import java.util.UUID
+import ru.uniyar.generateId
 
-class Message(
-    var theme: Theme,
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class Message(
+    val theme: Theme,
     val author: String,
     val text: String,
+    @JsonProperty("reactions")
     val reactions: List<Reaction> = listOf(),
+    val addDate: String,
+    val updateDate: String,
+    val id: String,
+    val revisions: Int = 1,
 ) {
-    private val reactionsList = reactions.toMutableList()
-    val listOfReactions: List<Reaction> = reactionsList
-    var addDate = formTodaysDate()
-    var updateDate = formTodaysDate()
-    var id = UUID.randomUUID().toString()
-    var revisions = 1
+    @get:JsonIgnore
+    val listOfReactions: List<Reaction> = reactions
+}
 
-    fun addReaction(reaction: Reaction) {
-        reactionsList.add(reaction)
-    }
+fun createMessage(
+    theme: Theme,
+    author: String,
+    text: String,
+    reactions: List<Reaction> = listOf(),
+): Message {
+    val currentDate = formTodaysDate()
+    return Message(
+        theme = theme,
+        author = author,
+        text = text,
+        reactions = reactions,
+        addDate = currentDate,
+        updateDate = currentDate,
+        id = generateId(),
+        revisions = 1,
+    )
+}
 
-    fun removeReaction(num: Int) {
-        reactionsList.removeAt(num)
-    }
+fun addReactionToMessage(
+    message: Message,
+    reaction: Reaction,
+): List<Reaction> = message.reactions + reaction
+
+fun removeReactionFromMessage(
+    message: Message,
+    index: Int,
+): List<Reaction> {
+    return message.reactions.filterIndexed { i, _ -> i != index }
 }

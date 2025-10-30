@@ -1,6 +1,5 @@
 package ru.uniyar.web.handlers
 
-import org.http4k.core.HttpHandler
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
@@ -15,27 +14,34 @@ import ru.uniyar.web.models.DeleteMessageDataVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
 class DeleteMessageHandler(
-    val users: Users,
-    val themes: Themes,
     val lens: ContextAwareViewRender,
-) : HttpHandler {
-    override fun invoke(request: Request): Response {
+) : StatefulHandler {
+    override fun invokeWithState(
+        request: Request,
+        themes: Themes,
+        users: Users,
+    ): HandlerResult {
         val themeId =
             lensOrNull(themeIdLens, request)
-                ?: throw return Response(NOT_FOUND).with(lens(request) of errorModel)
+                ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val themeAndMessages =
             themes.fetchThemeByNumber(themeId)
-                ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
+                ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val messageId =
             lensOrNull(messageIdLens, request)
-                ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
+                ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val message =
             themeAndMessages.messages.fetchMessageByNumber(messageId)
-                ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
+                ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val form = deleteLens(request)
         return if (form.fields["agreement"]?.isNotEmpty() == true) {
-            themeAndMessages.messages.removeMessage(messageId)
-            Response(FOUND).header("Location", "/themes/theme/$themeId")
+            val updatedMessages = themeAndMessages.messages.removeMessage(messageId)
+            val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+            val updatedThemes = themes.replaceTheme(themeId, updatedThemeAndMessages)
+            createResultWithThemes(
+                Response(FOUND).header("Location", "/themes/theme/$themeId"),
+                updatedThemes,
+            )
         } else {
             val author = users.usersList.first { it.userId == message.author }
             val messageStruct = AuthorStructure(message, author.userName)
@@ -45,7 +51,7 @@ class DeleteMessageHandler(
                 reactions.add(AuthorStructure(reaction, reactionAuthor.userName))
             }
             val model = DeleteMessageDataVM(messageStruct, reactions, true)
-            Response(BAD_REQUEST).with(lens(request) of model)
+            createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
     }
 }

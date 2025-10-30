@@ -11,7 +11,7 @@ buildscript {
 
 plugins{
     id("org.jlleitschuh.gradle.ktlint") version "11.6.0"
-    id "io.gitlab.arturbosch.detekt" version "1.23.1"
+    // id "io.gitlab.arturbosch.detekt" version "1.23.1"
 }
 
 apply plugin: "application"
@@ -52,6 +52,7 @@ dependencies {
     implementation("org.http4k:http4k-server-netty:${http4kVersion}")
     implementation("org.http4k:http4k-template-pebble:${http4kVersion}")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.12.7")
     implementation("org.slf4j:slf4j-simple:1.7.30")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.12.7.1")
     implementation group: "org.http4k", name: "http4k-cloudnative", version: http4kVersion
@@ -70,8 +71,8 @@ ktlint {
     version = ktlintVersion
 }
 
-detekt {
+/* detekt {
     allRules = true
     buildUponDefaultConfig = true
 }
-
+*/

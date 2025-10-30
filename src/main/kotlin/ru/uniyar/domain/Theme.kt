@@ -1,9 +1,20 @@
 package ru.uniyar.domain
 
 import ru.uniyar.formTodaysDate
-import java.util.UUID
+import ru.uniyar.generateId
 
-class Theme(val title: String, val author: String, val addPossibility: Boolean = true) {
-    var addDate = formTodaysDate()
-    var id = UUID.randomUUID().toString()
+data class Theme(
+    val title: String,
+    val author: String,
+    val addDate: String,
+    val id: String,
+    val addPossibility: Boolean = true,
+)
+
+fun createTheme(
+    title: String,
+    author: String,
+    addPossibility: Boolean = true,
+): Theme {
+    return Theme(title, author, formTodaysDate(), generateId(), addPossibility)
 }

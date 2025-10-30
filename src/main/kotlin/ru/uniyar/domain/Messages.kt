@@ -1,8 +1,11 @@
 package ru.uniyar.domain
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
 import org.http4k.core.Uri
 import ru.uniyar.Paginator
 import ru.uniyar.authorization.Users
+import ru.uniyar.createPaginator
 import ru.uniyar.formTodaysDate
 import ru.uniyar.itemsByPageNumber
 import ru.uniyar.pageAmount
@@ -10,12 +13,13 @@ import ru.uniyar.safeDateInFormat
 import ru.uniyar.safeDateInMillis
 import java.time.LocalDateTime
 
-class Messages {
-    private val messagesList = mutableListOf<Message>()
-    val listOfMessage: List<Message> = messagesList
-
-    fun add(message: Message) {
-        messagesList.add(message)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class Messages(
+    @JsonProperty("listOfMessage")
+    val messagesList: List<Message>,
+) {
+    fun add(message: Message): Messages {
+        return Messages(messagesList + message)
     }
 
     fun fetchMessageByNumber(id: String): Message? {
@@ -25,29 +29,32 @@ class Messages {
     fun replaceMessage(
         id: String,
         newMessage: Message,
-    ) {
+    ): Messages {
         val oldMessage = messagesList.first { it.id == id }
-        val i = getItemPositionById(oldMessage.id)
-        newMessage.id = oldMessage.id
-        newMessage.addDate = oldMessage.addDate
-        newMessage.updateDate = formTodaysDate()
-        newMessage.revisions = oldMessage.revisions + 1
-        messagesList[i] = newMessage
+        val updatedMessage =
+            newMessage.copy(
+                id = oldMessage.id,
+                addDate = oldMessage.addDate,
+                updateDate = formTodaysDate(),
+                revisions = oldMessage.revisions + 1,
+            )
+        return Messages(messagesList.map { if (it.id == id) updatedMessage else it })
     }
 
-    fun removeMessage(id: String) {
-        val deleteMessage = messagesList.first { it.id == id }
-        val i = getItemPositionById(deleteMessage.id)
-        messagesList.removeAt(i)
+    fun updateMessageReactions(
+        id: String,
+        newReactions: List<Reaction>,
+    ): Messages {
+        val oldMessage = messagesList.first { it.id == id }
+        val updatedMessage =
+            oldMessage.copy(
+                reactions = newReactions,
+            )
+        return Messages(messagesList.map { if (it.id == id) updatedMessage else it })
     }
 
-    private fun getItemPositionById(id: String): Int {
-        messagesList.forEachIndexed { index, item ->
-            if (item.id == id) {
-                return index
-            }
-        }
-        return -1
+    fun removeMessage(id: String): Messages {
+        return Messages(messagesList.filter { it.id != id })
     }
 
     fun messagesByUserParameters(
@@ -83,11 +90,11 @@ class Messages {
         val filteredList = messagesByUserParameters(mindate, maxdate)
         val pageAmount = pageAmount(filteredList)
         val pagedList = itemsByPageNumber(pageNum, filteredList)
-        val messages = mutableListOf<AuthorStructure<Message>>()
-        for (message in pagedList) {
-            val messageAuthor = users.usersList.first { it.userId == message.author }
-            messages.add(AuthorStructure(message, messageAuthor.userName))
-        }
-        return Paginator(messages, uri, pageNum, pageAmount)
+        val messages =
+            pagedList.map { message ->
+                val messageAuthor = users.usersList.first { it.userId == message.author }
+                AuthorStructure(message, messageAuthor.userName)
+            }
+        return createPaginator(messages, uri, pageNum, pageAmount)
     }
 }

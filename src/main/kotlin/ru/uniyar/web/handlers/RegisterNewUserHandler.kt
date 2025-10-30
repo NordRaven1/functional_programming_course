@@ -1,6 +1,5 @@
 package ru.uniyar.web.handlers
 
-import org.http4k.core.HttpHandler
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
@@ -8,19 +7,24 @@ import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.with
 import ru.uniyar.authorization.Users
 import ru.uniyar.authorization.addUser
+import ru.uniyar.authorization.formHexPass
+import ru.uniyar.domain.Themes
 import ru.uniyar.web.models.NewUserPageVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
 class RegisterNewUserHandler(
-    val users: Users,
     val lens: ContextAwareViewRender,
-) : HttpHandler {
-    override fun invoke(request: Request): Response {
+) : StatefulHandler {
+    override fun invokeWithState(
+        request: Request,
+        themes: Themes,
+        users: Users,
+    ): HandlerResult {
         val form = userFormLens(request)
         if (form.errors.isNotEmpty()) {
             val failures = formFailureInfoList(form.errors)
             val model = NewUserPageVM(form, failures)
-            return Response(BAD_REQUEST).with(lens(request) of model)
+            return createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
         val name = userNameField(form)
         val pass1 = passField(form)
@@ -31,15 +35,19 @@ class RegisterNewUserHandler(
             val failures = formFailureInfoList(form.errors)
             failures.add("Пароли не сходятся")
             val model = NewUserPageVM(form, failures)
-            return Response(BAD_REQUEST).with(lens(request) of model)
+            return createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
         if (users.findUserByName(name) != null) {
             val failures = formFailureInfoList(form.errors)
             failures.add("Невозможно зарегистрировать пользователя с таким именем")
             val model = NewUserPageVM(form, failures)
-            return Response(BAD_REQUEST).with(lens(request) of model)
+            return createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
-        addUser(users, name, pass1, role)
-        return Response(FOUND).header("Location", "/")
+        val hexPassInStr = formHexPass(pass1)
+        val updatedUsers = addUser(users, name, hexPassInStr, role)
+        return createResultWithUsers(
+            Response(FOUND).header("Location", "/"),
+            updatedUsers,
+        )
     }
 }

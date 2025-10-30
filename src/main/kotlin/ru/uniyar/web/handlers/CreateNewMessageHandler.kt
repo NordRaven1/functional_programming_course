@@ -1,6 +1,5 @@
 package ru.uniyar.web.handlers
 
-import org.http4k.core.HttpHandler
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
@@ -10,38 +9,45 @@ import org.http4k.core.with
 import org.http4k.lens.RequestContextLens
 import ru.uniyar.authorization.SharedState
 import ru.uniyar.authorization.Users
-import ru.uniyar.domain.Message
 import ru.uniyar.domain.Themes
+import ru.uniyar.domain.createMessage
 import ru.uniyar.web.models.NewMessageDataVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
 class CreateNewMessageHandler(
-    val users: Users,
-    val themes: Themes,
     val lens: ContextAwareViewRender,
     val sharedStateLens: RequestContextLens<SharedState?>,
-) : HttpHandler {
-    override fun invoke(request: Request): Response {
+) : StatefulHandler {
+    override fun invokeWithState(
+        request: Request,
+        themes: Themes,
+        users: Users,
+    ): HandlerResult {
         val themeId =
             lensOrNull(themeIdLens, request)
-                ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
+                ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val themeAndMessages =
             themes.fetchThemeByNumber(themeId)
-                ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
+                ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val form = messageFormLens(request)
         if (form.errors.isNotEmpty()) {
             val failures = formFailureInfoList(form.errors)
             val model = NewMessageDataVM(form, failures)
-            return Response(BAD_REQUEST).with(lens(request) of model)
+            return createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
-        val user = sharedStateLens(request) ?: return Response(BAD_REQUEST)
+        val user = sharedStateLens(request) ?: return createResult(Response(BAD_REQUEST))
         val authorId = user.userId
         val text = messageTextField(form)
-        val newMessage = Message(themeAndMessages.theme, authorId, text)
-        themeAndMessages.messages.add(newMessage)
-        return Response(FOUND).header(
-            "Location",
-            "/themes/theme/$themeId/message/${newMessage.id}",
+        val newMessage = createMessage(themeAndMessages.theme, authorId, text)
+        val updatedMessages = themeAndMessages.messages.add(newMessage)
+        val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+        val updatedThemes = themes.replaceTheme(themeId, updatedThemeAndMessages)
+        return createResultWithThemes(
+            Response(FOUND).header(
+                "Location",
+                "/themes/theme/$themeId/message/${newMessage.id}",
+            ),
+            updatedThemes,
         )
     }
 }

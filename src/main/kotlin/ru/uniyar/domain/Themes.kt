@@ -3,50 +3,48 @@ package ru.uniyar.domain
 import org.http4k.core.Uri
 import ru.uniyar.Paginator
 import ru.uniyar.authorization.Users
+import ru.uniyar.createPaginator
 import ru.uniyar.itemsByPageNumber
 import ru.uniyar.pageAmount
 import ru.uniyar.safeDateInFormat
 import java.time.LocalDateTime
 
-class Themes(gotlist: List<ThemeAndMessages>) {
-    private val listOfThemes = gotlist.toMutableList()
-    val themesList: List<ThemeAndMessages> = listOfThemes
-
-    fun add(themeAndMessages: ThemeAndMessages) {
-        listOfThemes.add(themeAndMessages)
+data class Themes(val themesList: List<ThemeAndMessages>) {
+    fun add(themeAndMessages: ThemeAndMessages): Themes {
+        return Themes(themesList + themeAndMessages)
     }
 
     fun fetchThemeByNumber(id: String): ThemeAndMessages? {
-        return listOfThemes.find { it.theme.id == id }
+        return themesList.find { it.theme.id == id }
     }
 
     fun replaceTheme(
         id: String,
         newTheme: ThemeAndMessages,
-    ) {
-        val oldTheme = listOfThemes.first { it.theme.id == id }
-        val i = getItemPositionById(oldTheme.theme.id)
-        newTheme.theme.id = oldTheme.theme.id
-        newTheme.theme.addDate = oldTheme.theme.addDate
-        for (message in newTheme.messages.listOfMessage) {
-            message.theme = newTheme.theme
-        }
-        listOfThemes[i] = newTheme
+    ): Themes {
+        val oldTheme = themesList.first { it.theme.id == id }
+        val updatedTheme =
+            newTheme.copy(
+                theme =
+                    newTheme.theme.copy(
+                        id = oldTheme.theme.id,
+                        addDate = oldTheme.theme.addDate,
+                    ),
+            )
+        val updatedMessages =
+            updatedTheme.messages.copy(
+                messagesList =
+                    updatedTheme.messages.messagesList.map { message ->
+                        message.copy(theme = updatedTheme.theme)
+                    },
+            )
+        val finalTheme = updatedTheme.copy(messages = updatedMessages)
+
+        return Themes(themesList.map { if (it.theme.id == id) finalTheme else it })
     }
 
-    fun removeTheme(id: String) {
-        val deleteTheme = listOfThemes.first { it.theme.id == id }
-        val i = getItemPositionById(deleteTheme.theme.id)
-        listOfThemes.removeAt(i)
-    }
-
-    private fun getItemPositionById(id: String): Int {
-        listOfThemes.forEachIndexed { index, item ->
-            if (item.theme.id == id) {
-                return index
-            }
-        }
-        return -1
+    fun removeTheme(id: String): Themes {
+        return Themes(themesList.filter { it.theme.id != id })
     }
 
     fun themesByUserParameters(
@@ -54,25 +52,28 @@ class Themes(gotlist: List<ThemeAndMessages>) {
         maxD: LocalDateTime?,
         themeSearch: String?,
     ): List<ThemeAndMessages> {
-        var filteredList = listOfThemes.toList()
-        if (themeSearch != null) {
-            filteredList = listOfThemes.filter { it.theme.title.contains(themeSearch, true) }
-        }
-        if (minD != null) {
-            filteredList =
-                filteredList.filter {
-                    safeDateInFormat(it.theme.addDate).isAfter(minD) ||
-                        safeDateInFormat(it.theme.addDate).isEqual(minD)
-                }
-        }
-        if (maxD != null) {
-            filteredList =
-                filteredList.filter {
-                    safeDateInFormat(it.theme.addDate).isBefore(maxD) ||
-                        safeDateInFormat(it.theme.addDate).isEqual(maxD)
-                }
-        }
-        return filteredList
+        return themesList
+            .let { list ->
+                themeSearch?.let { text ->
+                    list.filter { it.theme.title.contains(text, true) }
+                } ?: list
+            }
+            .let { list ->
+                minD?.let { min ->
+                    list.filter {
+                        safeDateInFormat(it.theme.addDate).isAfter(min) ||
+                            safeDateInFormat(it.theme.addDate).isEqual(min)
+                    }
+                } ?: list
+            }
+            .let { list ->
+                maxD?.let { max ->
+                    list.filter {
+                        safeDateInFormat(it.theme.addDate).isBefore(max) ||
+                            safeDateInFormat(it.theme.addDate).isEqual(max)
+                    }
+                } ?: list
+            }
     }
 
     fun getThemesPerPage(
@@ -86,11 +87,11 @@ class Themes(gotlist: List<ThemeAndMessages>) {
         val filteredList = themesByUserParameters(mindate, maxdate, themeSearch)
         val pageAmount = pageAmount(filteredList)
         val pagedList = itemsByPageNumber(pageNum, filteredList)
-        val themes = mutableListOf<AuthorStructure<ThemeAndMessages>>()
-        for (theme in pagedList) {
-            val themeAuthor = users.usersList.first { it.userId == theme.theme.author }
-            themes.add(AuthorStructure(theme, themeAuthor.userName))
-        }
-        return Paginator(themes, uri, pageNum, pageAmount)
+        val themes =
+            pagedList.map { themeAndMessages ->
+                val themeAuthor = users.usersList.first { it.userId == themeAndMessages.theme.author }
+                AuthorStructure(themeAndMessages, themeAuthor.userName)
+            }
+        return createPaginator(themes, uri, pageNum, pageAmount)
     }
 }

@@ -5,26 +5,30 @@ import java.security.MessageDigest
 import java.util.HexFormat
 import kotlin.system.exitProcess
 
-val commaFormat = HexFormat.of()
-
 fun addUser(
     users: Users,
     username: String,
-    password: String,
+    hashedPassword: String,
     role: Permissions,
-) {
-    val hexPassInStr = formHexPass(password)
-    val newUser = User(username, hexPassInStr, role)
-    users.add(newUser)
+): Users {
+    val newUser = createUser(username, hashedPassword, role)
+    return users.add(newUser)
+}
+
+fun hashPasswordWithSalt(
+    password: String,
+    salt: String,
+): String {
+    val messageDigest = MessageDigest.getInstance("SHA-256")
+    val passAndSalt = password + salt
+    val hexPass = passAndSalt.toByteArray(Charsets.UTF_8)
+    val digest = messageDigest.digest(hexPass)
+    return HexFormat.of().formatHex(digest)
 }
 
 fun formHexPass(password: String): String {
-    val messageDigest = MessageDigest.getInstance("SHA-256")
     val saltConfig = readAuthSaltFromConfiguration() ?: exitProcess(0)
-    val passAndSalt = password + saltConfig.salt
-    val hexPass = passAndSalt.toByteArray(Charsets.UTF_8)
-    val digest = messageDigest.digest(hexPass)
-    return commaFormat.formatHex(digest)
+    return hashPasswordWithSalt(password, saltConfig.salt)
 }
 
 fun authUser(
