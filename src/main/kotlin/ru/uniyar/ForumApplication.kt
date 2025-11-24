@@ -63,6 +63,7 @@ import ru.uniyar.web.handlers.ShowNewThemeFormHandler
 import ru.uniyar.web.handlers.ShowRegistrationPageHandler
 import ru.uniyar.web.handlers.ThemesListHandler
 import ru.uniyar.web.handlers.UserListHandler
+import ru.uniyar.web.handlers.wrapStateReadingHandler
 import ru.uniyar.web.handlers.wrapStatefulHandler
 import ru.uniyar.web.templates.ContextAwarePebbleTemplates
 import ru.uniyar.web.templates.ContextAwareViewRender
@@ -77,76 +78,87 @@ fun router(
     permissionLens: RequestContextLens<Permissions>,
     sharedStateLens: RequestContextLens<SharedState?>,
 ) = routes(
-    "/" bind GET to ShowAppInfoHandler(lens),
-    "/login" bind GET to ShowAuthPageHandler(WebForm(), lens, permissionLens),
-    "/login" bind POST to { request ->
-        AuthorizationHandler(usersRef.value, jwtTools, lens).invoke(request)
-    },
-    "/logout" bind GET to LogoutHandler(),
-    "/users/new" bind GET to ShowRegistrationPageHandler(WebForm(), lens, permissionLens),
+    "/" bind GET to wrapStateReadingHandler(ShowAppInfoHandler(lens), themesRef, usersRef),
+    "/login" bind GET to wrapStateReadingHandler(ShowAuthPageHandler(WebForm(), lens, permissionLens), themesRef, usersRef),
+    "/login" bind POST to wrapStateReadingHandler(AuthorizationHandler(jwtTools, lens), themesRef, usersRef),
+    "/logout" bind GET to wrapStateReadingHandler(LogoutHandler(), themesRef, usersRef),
+    "/users/new" bind GET to wrapStateReadingHandler(ShowRegistrationPageHandler(WebForm(), lens, permissionLens), themesRef, usersRef),
     "/users/new" bind POST to wrapStatefulHandler(RegisterNewUserHandler(lens), themesRef, usersRef),
-    "/users/{userId}" bind GET to { request ->
-        ShowEditUserPageHandler(usersRef.value, lens, permissionLens).invoke(request)
-    },
+    "/users/{userId}" bind GET to wrapStateReadingHandler(ShowEditUserPageHandler(lens, permissionLens), themesRef, usersRef),
     "/users/{userId}" bind POST to wrapStatefulHandler(EditUserHandler(lens), themesRef, usersRef),
-    "/users/{userId}/permissions" bind GET to { request ->
-        ShowEditPermissionsFormHandler(usersRef.value, lens, permissionLens).invoke(request)
-    },
-    "/users/{userId}/permissions" bind POST to wrapStatefulHandler(EditPermissionsHandler(lens), themesRef, usersRef),
-    "/users/{userId}/password" bind GET to { request ->
-        ShowEditPasswordHandler(usersRef.value, WebForm(), lens, permissionLens).invoke(request)
-    },
+    "/users/{userId}/permissions" bind GET to
+        wrapStateReadingHandler(
+            ShowEditPermissionsFormHandler(lens, permissionLens), themesRef, usersRef,
+        ),
+    "/users/{userId}/permissions" bind POST to
+        wrapStatefulHandler(
+            EditPermissionsHandler(lens), themesRef, usersRef,
+        ),
+    "/users/{userId}/password" bind GET to
+        wrapStateReadingHandler(
+            ShowEditPasswordHandler(WebForm(), lens, permissionLens), themesRef, usersRef,
+        ),
     "/users/{userId}/password" bind POST to wrapStatefulHandler(EditPasswordHandler(lens), themesRef, usersRef),
     "/users/{userId}/ban" bind GET to wrapStatefulHandler(BanUserHandler(lens, permissionLens), themesRef, usersRef),
-    "/users" bind GET to { request ->
-        UserListHandler(usersRef.value, lens, permissionLens).invoke(request)
-    },
-    "/themes/new" bind GET to ShowNewThemeFormHandler(WebForm(), lens, permissionLens),
-    "/themes/new" bind POST to wrapStatefulHandler(CreateNewThemeHandler(lens, sharedStateLens), themesRef, usersRef),
-    "/themes" bind GET to { request ->
-        ThemesListHandler(lens, themesRef.value, usersRef.value).invoke(request)
-    },
-    "/themes/theme/{themeId}/new" bind GET to { request ->
-        ShowNewMessageFormHandler(themesRef.value, WebForm(), lens, permissionLens).invoke(request)
-    },
+    "/users" bind GET to wrapStateReadingHandler(UserListHandler(lens, permissionLens), themesRef, usersRef),
+    "/themes/new" bind GET to
+        wrapStateReadingHandler(
+            ShowNewThemeFormHandler(WebForm(), lens, permissionLens), themesRef, usersRef,
+        ),
+    "/themes/new" bind POST to
+        wrapStatefulHandler(
+            CreateNewThemeHandler(lens, sharedStateLens), themesRef, usersRef,
+        ),
+    "/themes" bind GET to wrapStateReadingHandler(ThemesListHandler(lens), themesRef, usersRef),
+    "/themes/theme/{themeId}/new" bind GET to
+        wrapStateReadingHandler(
+            ShowNewMessageFormHandler(WebForm(), lens, permissionLens), themesRef, usersRef,
+        ),
     "/themes/theme/{themeId}/new" bind POST to wrapStatefulHandler(CreateNewMessageHandler(lens, sharedStateLens), themesRef, usersRef),
-    "/themes/theme/{themeId}/edit" bind GET to { request ->
-        ShowEditThemeFormHandler(themesRef.value::fetchThemeByNumber, lens, permissionLens, sharedStateLens).invoke(request)
-    },
+    "/themes/theme/{themeId}/edit" bind GET to
+        wrapStateReadingHandler(
+            ShowEditThemeFormHandler(lens, permissionLens, sharedStateLens), themesRef, usersRef,
+        ),
     "/themes/theme/{themeId}/edit" bind POST to wrapStatefulHandler(EditThemeHandler(lens), themesRef, usersRef),
-    "/themes/theme/{themeId}/delete" bind GET to { request ->
-        ShowDeleteThemeFormHandler(
-            usersRef.value, themesRef.value::fetchThemeByNumber, lens, permissionLens,
-            sharedStateLens,
-        ).invoke(request)
-    },
+    "/themes/theme/{themeId}/delete" bind GET to
+        wrapStateReadingHandler(
+            ShowDeleteThemeFormHandler(lens, permissionLens, sharedStateLens), themesRef, usersRef,
+        ),
     "/themes/theme/{themeId}/delete" bind POST to wrapStatefulHandler(DeleteThemeHandler(lens), themesRef, usersRef),
-    "/themes/theme/{themeId}" bind GET to { request ->
-        MessageListHandler(usersRef.value, themesRef.value::fetchThemeByNumber, lens).invoke(request)
-    },
-    "/themes/theme/{themeId}/message/{mesId}/newReaction" bind GET to { request ->
-        ShowNewReactionFormHandler(themesRef.value, WebForm(), lens, permissionLens).invoke(request)
-    },
+    "/themes/theme/{themeId}" bind GET to wrapStateReadingHandler(MessageListHandler(lens), themesRef, usersRef),
+    "/themes/theme/{themeId}/message/{mesId}/newReaction" bind GET to
+        wrapStateReadingHandler(
+            ShowNewReactionFormHandler(WebForm(), lens, permissionLens), themesRef, usersRef,
+        ),
     "/themes/theme/{themeId}/message/{mesId}/newReaction" bind POST to
-        wrapStatefulHandler(CreateNewReactionHandler(lens, sharedStateLens), themesRef, usersRef),
-    "/themes/theme/{themeId}/message/{mesId}/delete" bind GET to { request ->
-        ShowDeleteMessageFormHandler(usersRef.value, themesRef.value, lens, permissionLens, sharedStateLens).invoke(request)
-    },
-    "/themes/theme/{themeId}/message/{mesId}/delete" bind POST to wrapStatefulHandler(DeleteMessageHandler(lens), themesRef, usersRef),
-    "/themes/theme/{themeId}/message/{mesId}/edit" bind GET to { request ->
-        ShowEditMessageFormHandler(themesRef.value, lens, permissionLens, sharedStateLens).invoke(request)
-    },
+        wrapStatefulHandler(
+            CreateNewReactionHandler(lens, sharedStateLens), themesRef, usersRef,
+        ),
+    "/themes/theme/{themeId}/message/{mesId}/delete" bind GET to
+        wrapStateReadingHandler(
+            ShowDeleteMessageFormHandler(lens, permissionLens, sharedStateLens), themesRef, usersRef,
+        ),
+    "/themes/theme/{themeId}/message/{mesId}/delete" bind POST to
+        wrapStatefulHandler(
+            DeleteMessageHandler(lens), themesRef, usersRef,
+        ),
+    "/themes/theme/{themeId}/message/{mesId}/edit" bind GET to
+        wrapStateReadingHandler(
+            ShowEditMessageFormHandler(lens, permissionLens, sharedStateLens), themesRef, usersRef,
+        ),
     "/themes/theme/{themeId}/message/{mesId}/edit" bind POST to
-        wrapStatefulHandler(EditMessageHandler(lens), themesRef, usersRef),
-    "/themes/theme/{themeId}/message/{mesId}/deleteReaction/{reactNum}"
-        bind GET to { request ->
-            ShowDeleteReactionFormHandler(usersRef.value, themesRef.value, lens, permissionLens, sharedStateLens).invoke(request)
-        },
-    "/themes/theme/{themeId}/message/{mesId}/deleteReaction/{reactNum}"
-        bind POST to wrapStatefulHandler(DeleteReactionHandler(lens), themesRef, usersRef),
-    "/themes/theme/{themeId}/message/{mesId}" bind GET to { request ->
-        ShowMessageHandler(usersRef.value, themesRef.value, lens).invoke(request)
-    },
+        wrapStatefulHandler(
+            EditMessageHandler(lens), themesRef, usersRef,
+        ),
+    "/themes/theme/{themeId}/message/{mesId}/deleteReaction/{reactNum}" bind GET to
+        wrapStateReadingHandler(
+            ShowDeleteReactionFormHandler(lens, permissionLens, sharedStateLens), themesRef, usersRef,
+        ),
+    "/themes/theme/{themeId}/message/{mesId}/deleteReaction/{reactNum}" bind POST to
+        wrapStatefulHandler(
+            DeleteReactionHandler(lens), themesRef, usersRef,
+        ),
+    "/themes/theme/{themeId}/message/{mesId}" bind GET to wrapStateReadingHandler(ShowMessageHandler(lens), themesRef, usersRef),
     static(ResourceLoader.Classpath("/ru/uniyar/public")),
 )
 

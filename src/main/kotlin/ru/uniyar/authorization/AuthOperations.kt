@@ -5,14 +5,14 @@ import java.security.MessageDigest
 import java.util.HexFormat
 import kotlin.system.exitProcess
 
-fun addUser(
+fun registerNewUser(
     users: Users,
     username: String,
     hashedPassword: String,
     role: Permissions,
 ): Users {
     val newUser = createUser(username, hashedPassword, role)
-    return users.add(newUser)
+    return addNewUser(newUser, users)
 }
 
 fun hashPasswordWithSalt(
@@ -36,7 +36,7 @@ fun authUser(
     username: String,
     password: String,
 ): Boolean {
-    val user = users.findUserByName(username) ?: return false
+    val user = findUserByName(users, username) ?: return false
     return user.password == formHexPass(password)
 }
 
@@ -44,6 +44,10 @@ fun formSharedState(
     users: Users,
     userId: String,
 ): SharedState? {
-    val user = users.findUserById(userId) ?: return null
+    val user = findUserById(users, userId) ?: return null
     return SharedState(user.userId, user.userName)
+}
+
+fun getDisplayableUsers(users: Users): List<User> {
+    return users.usersList.drop(1)
 }

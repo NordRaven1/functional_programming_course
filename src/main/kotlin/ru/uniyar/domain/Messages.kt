@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import org.http4k.core.Uri
 import ru.uniyar.Paginator
 import ru.uniyar.authorization.Users
+import ru.uniyar.authorization.findFirstUserById
 import ru.uniyar.createPaginator
 import ru.uniyar.formTodaysDate
 import ru.uniyar.itemsByPageNumber
@@ -17,84 +18,142 @@ import java.time.LocalDateTime
 data class Messages(
     @JsonProperty("listOfMessage")
     val messagesList: List<Message>,
-) {
-    fun add(message: Message): Messages {
-        return Messages(messagesList + message)
-    }
+)
 
-    fun fetchMessageByNumber(id: String): Message? {
-        return messagesList.find { it.id == id }
-    }
+fun addNewMessage(
+    themeAndMessages: ThemeAndMessages,
+    themes: Themes,
+    authorId: String,
+    text: String,
+): Pair<Themes, Message> {
+    val newMessage = createMessage(themeAndMessages.theme, authorId, text)
+    val updatedMessages = addMessageToTheme(themeAndMessages, newMessage)
+    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+    val updatedThemes = replaceThemeInList(themes, updatedThemeAndMessages)
+    return updatedThemes to newMessage
+}
 
-    fun replaceMessage(
-        id: String,
-        newMessage: Message,
-    ): Messages {
-        val oldMessage = messagesList.first { it.id == id }
-        val updatedMessage =
-            newMessage.copy(
-                id = oldMessage.id,
-                addDate = oldMessage.addDate,
-                updateDate = formTodaysDate(),
-                revisions = oldMessage.revisions + 1,
-            )
-        return Messages(messagesList.map { if (it.id == id) updatedMessage else it })
-    }
+fun editMessage(
+    themes: Themes,
+    themeAndMessages: ThemeAndMessages,
+    message: Message,
+    text: String,
+): Themes {
+    val updatedMessages = updateMessageInList(themeAndMessages.messages, message, text)
+    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+    return replaceThemeInList(themes, updatedThemeAndMessages)
+}
 
-    fun updateMessageReactions(
-        id: String,
-        newReactions: List<Reaction>,
-    ): Messages {
-        val oldMessage = messagesList.first { it.id == id }
-        val updatedMessage =
-            oldMessage.copy(
-                reactions = newReactions,
-            )
-        return Messages(messagesList.map { if (it.id == id) updatedMessage else it })
-    }
+fun deleteMessage(
+    themes: Themes,
+    themeAndMessages: ThemeAndMessages,
+    message: Message,
+): Themes {
+    val updatedMessages = removeMessageFromList(themeAndMessages.messages, message)
+    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+    return replaceThemeInList(themes, updatedThemeAndMessages)
+}
 
-    fun removeMessage(id: String): Messages {
-        return Messages(messagesList.filter { it.id != id })
-    }
-
-    fun messagesByUserParameters(
-        minD: LocalDateTime?,
-        maxD: LocalDateTime?,
-    ): List<Message> {
-        var filteredList =
-            messagesList.sortedBy { safeDateInMillis(safeDateInFormat(it.addDate)) }
-        if (minD != null) {
-            filteredList =
-                filteredList.filter {
-                    safeDateInFormat(it.addDate).isAfter(minD) ||
-                        safeDateInFormat(it.addDate).isEqual(minD)
+fun updateMessageInList(
+    messages: Messages,
+    message: Message,
+    text: String,
+): Messages {
+    val updatedMessage =
+        message.copy(
+            text = text,
+            updateDate = formTodaysDate(),
+            revisions = message.revisions + 1,
+        )
+    return messages.copy(
+        messagesList =
+            messages.messagesList.map {
+                if (it.id == updatedMessage.id) {
+                    updatedMessage
+                } else {
+                    it
                 }
-        }
-        if (maxD != null) {
-            filteredList =
-                filteredList.filter {
-                    safeDateInFormat(it.addDate).isBefore(maxD) ||
-                        safeDateInFormat(it.addDate).isEqual(maxD)
-                }
-        }
-        return filteredList
-    }
+            },
+    )
+}
 
-    fun getMessagesPerPage(
-        users: Users,
-        mindate: LocalDateTime?,
-        maxdate: LocalDateTime?,
-        pageNum: Int,
-        uri: Uri,
-    ): Paginator<AuthorStructure<Message>> {
-        val filteredList = messagesByUserParameters(mindate, maxdate)
-        val pageAmount = pageAmount(filteredList)
-        val pagedList = itemsByPageNumber(pageNum, filteredList)
-        val messages =
-            pagedList.map { message ->
-                val messageAuthor = users.usersList.first { it.userId == message.author }
-                AuthorStructure(message, messageAuthor.userName)
+fun replaceMessageInList(
+    messages: Messages,
+    updatedMessage: Message,
+): Messages {
+    return messages.copy(
+        messagesList =
+            messages.messagesList.map {
+                if (it.id == updatedMessage.id) {
+                    updatedMessage
+                } else {
+                    it
+                }
+            },
+    )
+}
+
+fun addMessageToTheme(
+    themeAndMessages: ThemeAndMessages,
+    message: Message,
+): Messages {
+    val messages = themeAndMessages.messages
+    return messages.copy(messagesList = messages.messagesList + message)
+}
+
+fun removeMessageFromList(
+    messages: Messages,
+    message: Message,
+): Messages {
+    return messages.copy(messagesList = messages.messagesList.filter { it.id != message.id })
+}
+
+fun fetchMessageByNumber(
+    messages: Messages,
+    id: String,
+): Message? {
+    return messages.messagesList.find { it.id == id }
+}
+
+fun messagesByUserParameters(
+    messages: Messages,
+    minD: LocalDateTime?,
+    maxD: LocalDateTime?,
+): List<Message> {
+    var filteredList =
+        messages.messagesList.sortedBy { safeDateInMillis(safeDateInFormat(it.addDate)) }
+    if (minD != null) {
+        filteredList =
+            filteredList.filter {
+                safeDateInFormat(it.addDate).isAfter(minD) ||
+                    safeDateInFormat(it.addDate).isEqual(minD)
             }
-        return createPaginator(messages, uri, pageNum, pageAmount)
     }
+    if (maxD != null) {
+        filteredList =
+            filteredList.filter {
+                safeDateInFormat(it.addDate).isBefore(maxD) ||
+                    safeDateInFormat(it.addDate).isEqual(maxD)
+            }
+    }
+    return filteredList
+}
+
+fun getMessagesPerPage(
+    messages: Messages,
+    users: Users,
+    mindate: LocalDateTime?,
+    maxdate: LocalDateTime?,
+    pageNum: Int,
+    uri: Uri,
+): Paginator<AuthorStructure<Message>> {
+    val filteredList = messagesByUserParameters(messages, mindate, maxdate)
+    val pageAmount = pageAmount(filteredList)
+    val pagedList = itemsByPageNumber(pageNum, filteredList)
+    val messagesPerPage =
+        pagedList.map { message ->
+            val messageAuthor = findFirstUserById(users, message.author)
+            AuthorStructure(message, messageAuthor.userName)
+        }
+    return createPaginator(messagesPerPage, uri, pageNum, pageAmount)
 }

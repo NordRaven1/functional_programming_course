@@ -21,6 +21,13 @@ data class Message(
     val listOfReactions: List<Reaction> = reactions
 }
 
+fun findReactionInList(
+    message: Message,
+    reactionNum: Int,
+): Reaction {
+    return message.listOfReactions[reactionNum]
+}
+
 fun createMessage(
     theme: Theme,
     author: String,
@@ -43,11 +50,40 @@ fun createMessage(
 fun addReactionToMessage(
     message: Message,
     reaction: Reaction,
-): List<Reaction> = message.reactions + reaction
+): Message {
+    return message.copy(reactions = message.reactions + reaction)
+}
 
 fun removeReactionFromMessage(
     message: Message,
     index: Int,
-): List<Reaction> {
-    return message.reactions.filterIndexed { i, _ -> i != index }
+): Message {
+    val updatedReactions = message.reactions.filterIndexed { i, _ -> i != index }
+    return message.copy(reactions = updatedReactions)
+}
+
+fun addNewReaction(
+    themes: Themes,
+    themeAndMessages: ThemeAndMessages,
+    message: Message,
+    reactionType: Int,
+    author: String,
+): Themes {
+    val newReaction = createReaction(reactionType, author)
+    val updatedMessage = addReactionToMessage(message, newReaction)
+    val updatedMessages = replaceMessageInList(themeAndMessages.messages, updatedMessage)
+    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+    return replaceThemeInList(themes, updatedThemeAndMessages)
+}
+
+fun deleteReaction(
+    themes: Themes,
+    themeAndMessages: ThemeAndMessages,
+    message: Message,
+    reactionNum: Int,
+): Themes {
+    val updatedMessage = removeReactionFromMessage(message, reactionNum)
+    val updatedMessages = replaceMessageInList(themeAndMessages.messages, updatedMessage)
+    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+    return replaceThemeInList(themes, updatedThemeAndMessages)
 }

@@ -8,10 +8,9 @@ import org.http4k.core.with
 import org.http4k.lens.RequestContextLens
 import ru.uniyar.authorization.SharedState
 import ru.uniyar.authorization.Users
-import ru.uniyar.domain.Messages
-import ru.uniyar.domain.ThemeAndMessages
 import ru.uniyar.domain.Themes
-import ru.uniyar.domain.createTheme
+import ru.uniyar.domain.addNewTheme
+import ru.uniyar.domain.findThemeByNormalizedTitle
 import ru.uniyar.web.models.NewThemeDataVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
@@ -25,28 +24,22 @@ class CreateNewThemeHandler(
         users: Users,
     ): HandlerResult {
         val form = themeFormLens(request)
-        if (form.errors.isNotEmpty()) {
+        if (isListNotEmpty(form.errors)) {
             val failures = formFailureInfoList(form.errors)
             val model = NewThemeDataVM(form, failures)
             return createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
         val title = themeTitleField(form)
-        val themeCheck =
-            themes.themesList.find { allThemes ->
-                allThemes.theme.title.replace(" ", "")
-                    .equals(title.replace(" ", ""), true)
-            }
+        val themeCheck = findThemeByNormalizedTitle(themes, title)
         if (themeCheck != null) {
             val failures = formFailureInfoList(form.errors)
-            failures.add("Такая тема уже существует!")
+            addFailureInList(failures, "Такая тема уже существует!")
             val model = NewThemeDataVM(form, failures)
             return createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
         val user = sharedStateLens(request) ?: return createResult(Response(BAD_REQUEST))
         val authorId = user.userId
-        val newTheme = createTheme(title, authorId)
-        val newThemeAndMessages = ThemeAndMessages(newTheme, Messages(emptyList()))
-        val updatedThemes = themes.add(newThemeAndMessages)
+        val updatedThemes = addNewTheme(themes, title, authorId)
         return createResultWithThemes(
             Response(FOUND).header("Location", "/themes"),
             updatedThemes,

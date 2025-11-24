@@ -5,6 +5,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -51,3 +52,5 @@ fun formLifeSpan(): Date {
 }
 
 fun generateId(): String = UUID.randomUUID().toString()
+
+fun defaultAuthCookieExpiry(): Instant = Instant.now().plus(7, ChronoUnit.DAYS)

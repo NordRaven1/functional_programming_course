@@ -8,7 +8,10 @@ import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.with
 import org.http4k.lens.RequestContextLens
 import ru.uniyar.authorization.Permissions
+import ru.uniyar.authorization.UserEditAction
 import ru.uniyar.authorization.Users
+import ru.uniyar.authorization.editUser
+import ru.uniyar.authorization.findUserById
 import ru.uniyar.domain.Themes
 import ru.uniyar.web.templates.ContextAwareViewRender
 
@@ -26,9 +29,8 @@ class BanUserHandler(
         val userId =
             lensOrNull(userIdLens, request)
                 ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
-        val user = users.findUserById(userId) ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
-        val updatedUser = user.copy(role = rolesList.get(0))
-        val updatedUsers = users.editUser(userId, updatedUser)
+        val user = findUserById(users, userId) ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
+        val updatedUsers = editUser(users, user.userId, UserEditAction.ResetToDefaultRole)
         return createResultWithUsers(
             Response(FOUND).header(
                 "Location",

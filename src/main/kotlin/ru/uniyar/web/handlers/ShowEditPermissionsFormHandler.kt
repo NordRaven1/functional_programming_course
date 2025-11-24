@@ -1,6 +1,5 @@
 package ru.uniyar.web.handlers
 
-import org.http4k.core.HttpHandler
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.FORBIDDEN
@@ -11,21 +10,26 @@ import org.http4k.lens.RequestContextLens
 import org.http4k.lens.WebForm
 import ru.uniyar.authorization.Permissions
 import ru.uniyar.authorization.Users
+import ru.uniyar.authorization.findUserById
+import ru.uniyar.domain.Themes
 import ru.uniyar.web.models.EditPermissionsVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
 class ShowEditPermissionsFormHandler(
-    val users: Users,
     val lens: ContextAwareViewRender,
     val permissionLens: RequestContextLens<Permissions>,
-) : HttpHandler {
-    override fun invoke(request: Request): Response {
+) : StateReadingHandler {
+    override fun invokeWithContext(
+        request: Request,
+        themes: Themes,
+        users: Users,
+    ): Response {
         val role = permissionLens(request)
         if (role.name != "ADMIN") return Response(FORBIDDEN)
         val userId =
             lensOrNull(userIdLens, request)
                 ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
-        val user = users.findUserById(userId) ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
+        val user = findUserById(users, userId) ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
         val addT = if (user.role.canAddTheme) "on" else "down"
         val editT = if (user.role.canEditTheme) "on" else "down"
         val delT = if (user.role.canDeleteTheme) "on" else "down"

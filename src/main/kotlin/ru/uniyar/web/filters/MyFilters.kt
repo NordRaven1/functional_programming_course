@@ -11,6 +11,7 @@ import ru.uniyar.authorization.JwtTools
 import ru.uniyar.authorization.Permissions
 import ru.uniyar.authorization.SharedState
 import ru.uniyar.authorization.Users
+import ru.uniyar.authorization.findUserByName
 import ru.uniyar.authorization.formSharedState
 import ru.uniyar.web.handlers.MutableRef
 import ru.uniyar.web.handlers.errorModel
@@ -61,7 +62,7 @@ fun permissionFilter(
         if (sharedState == null) {
             next(request.with(permissionLens of anonRole))
         } else {
-            val user = users.findUserByName(sharedState.username)
+            val user = findUserByName(users, sharedState.username)
             if (user == null) {
                 next(request.with(permissionLens of anonRole))
             } else {

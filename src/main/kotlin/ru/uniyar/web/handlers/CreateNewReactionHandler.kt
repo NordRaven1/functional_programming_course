@@ -10,8 +10,9 @@ import org.http4k.lens.RequestContextLens
 import ru.uniyar.authorization.SharedState
 import ru.uniyar.authorization.Users
 import ru.uniyar.domain.Themes
-import ru.uniyar.domain.addReactionToMessage
-import ru.uniyar.domain.createReaction
+import ru.uniyar.domain.addNewReaction
+import ru.uniyar.domain.fetchMessageByNumber
+import ru.uniyar.domain.fetchThemeByNumber
 import ru.uniyar.web.models.NewReactionDataVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
@@ -29,16 +30,16 @@ class CreateNewReactionHandler(
             lensOrNull(themeIdLens, request)
                 ?: return notFoundResponse
         val themeAndMessages =
-            themes.fetchThemeByNumber(themeId)
+            fetchThemeByNumber(themes, themeId)
                 ?: return notFoundResponse
         val messageId =
             lensOrNull(messageIdLens, request)
                 ?: return notFoundResponse
         val message =
-            themeAndMessages.messages.fetchMessageByNumber(messageId)
+            fetchMessageByNumber(themeAndMessages.messages, messageId)
                 ?: return notFoundResponse
         val form = reactionFormLens(request)
-        if (form.errors.isNotEmpty()) {
+        if (isListNotEmpty(form.errors)) {
             val failures = formFailureInfoList(form.errors)
             val model = NewReactionDataVM(form, reactionsList, failures)
             return createResult(Response(BAD_REQUEST).with(lens(request) of model))
@@ -46,12 +47,8 @@ class CreateNewReactionHandler(
         val user = sharedStateLens(request) ?: return createResult(Response(BAD_REQUEST))
         val authorId = user.userId
         val reactionType = reactionTypeField(form)
-        val reaction = reactionsList.find { reaction -> reaction == reactionType } ?: 10067
-        val newReaction = createReaction(reaction, authorId)
-        val updatedReactions = addReactionToMessage(message, newReaction)
-        val updatedMessages = themeAndMessages.messages.updateMessageReactions(messageId, updatedReactions)
-        val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
-        val updatedThemes = themes.replaceTheme(themeId, updatedThemeAndMessages)
+        val reaction = findReaction(reactionType)
+        val updatedThemes = addNewReaction(themes, themeAndMessages, message, reaction, authorId)
         return createResultWithThemes(
             Response(FOUND).header(
                 "Location",

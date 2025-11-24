@@ -1,23 +1,71 @@
 package ru.uniyar.authorization
 
-data class Users(val usersList: List<User>) {
-    fun add(user: User): Users {
-        return Users(usersList + user)
-    }
+import ru.uniyar.web.handlers.findRole
 
-    fun findUserByName(username: String): User? {
-        return usersList.find { it.userName == username }
-    }
+data class Users(val usersList: List<User>)
 
-    fun findUserById(id: String): User? {
-        return usersList.find { it.userId == id }
-    }
+sealed interface UserEditAction {
+    data class FindAndSetRole(val roleName: String) : UserEditAction
 
-    fun editUser(
-        id: String,
-        user: User,
-    ): Users {
-        val updatedUser = user.copy(userId = id)
-        return Users(usersList.map { if (it.userId == id) updatedUser else it })
-    }
+    data class SetRole(val role: Permissions) : UserEditAction
+
+    data class SetPassword(val rawPassword: String) : UserEditAction
+    data object ResetToDefaultRole : UserEditAction
+}
+
+fun addNewUser(
+    user: User,
+    users: Users,
+): Users {
+    return users.copy(usersList = users.usersList + user)
+}
+
+fun editUser(
+    users: Users,
+    id: String,
+    action: UserEditAction,
+): Users {
+    val updatedList =
+        users.usersList.map { user ->
+            if (user.userId != id) return@map user
+
+            when (action) {
+                is UserEditAction.FindAndSetRole -> {
+                    val role = findRole(action.roleName)
+                    user.copy(role = role)
+                }
+                is UserEditAction.SetRole -> {
+                    user.copy(role = action.role)
+                }
+                is UserEditAction.SetPassword -> {
+                    val hashed = formHexPass(action.rawPassword)
+                    user.copy(password = hashed)
+                }
+                UserEditAction.ResetToDefaultRole -> {
+                    user.copy(role = findRole("BANNED"))
+                }
+            }
+        }
+    return users.copy(usersList = updatedList)
+}
+
+fun findUserByName(
+    users: Users,
+    username: String,
+): User? {
+    return users.usersList.find { it.userName == username }
+}
+
+fun findUserById(
+    users: Users,
+    id: String,
+): User? {
+    return users.usersList.find { it.userId == id }
+}
+
+fun findFirstUserById(
+    users: Users,
+    id: String,
+): User {
+    return users.usersList.first { it.userId == id }
 }

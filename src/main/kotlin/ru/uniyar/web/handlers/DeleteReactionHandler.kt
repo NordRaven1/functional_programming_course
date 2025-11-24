@@ -7,9 +7,13 @@ import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.with
 import ru.uniyar.authorization.Users
+import ru.uniyar.authorization.findFirstUserById
 import ru.uniyar.domain.AuthorStructure
 import ru.uniyar.domain.Themes
-import ru.uniyar.domain.removeReactionFromMessage
+import ru.uniyar.domain.deleteReaction
+import ru.uniyar.domain.fetchMessageByNumber
+import ru.uniyar.domain.fetchThemeByNumber
+import ru.uniyar.domain.findReactionInList
 import ru.uniyar.web.models.DeleteReactionDataVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
@@ -23,19 +27,17 @@ class DeleteReactionHandler(
     ): HandlerResult {
         val notFoundResponse = createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val themeId = lensOrNull(themeIdLens, request) ?: return notFoundResponse
-        val themeAndMessages = themes.fetchThemeByNumber(themeId) ?: return notFoundResponse
+        val themeAndMessages = fetchThemeByNumber(themes, themeId) ?: return notFoundResponse
         val messageId = lensOrNull(messageIdLens, request) ?: return notFoundResponse
-        val message = themeAndMessages.messages.fetchMessageByNumber(messageId) ?: return notFoundResponse
-        val reactuinNum = lensOrNull(reactionNumberLens, request)
-        if (reactuinNum == null || reactuinNum > message.listOfReactions.lastIndex || reactuinNum <= -1) {
+        val message = fetchMessageByNumber(themeAndMessages.messages, messageId) ?: return notFoundResponse
+        val reactionNum = lensOrNull(reactionNumberLens, request)
+        if (reactionNum == null || reactionNum > message.listOfReactions.lastIndex || reactionNum <= -1) {
             return notFoundResponse
         }
         val form = deleteLens(request)
-        return if (form.fields["agreement"]?.isNotEmpty() == true) {
-            val updatedReactions = removeReactionFromMessage(message, reactuinNum)
-            val updatedMessages = themeAndMessages.messages.updateMessageReactions(messageId, updatedReactions)
-            val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
-            val updatedThemes = themes.replaceTheme(themeId, updatedThemeAndMessages)
+        val agreement = form.fields["agreement"]
+        return if (agreement != null && agreement.size > 0) {
+            val updatedThemes = deleteReaction(themes, themeAndMessages, message, reactionNum)
             createResultWithThemes(
                 Response(FOUND).header(
                     "Location",
@@ -44,8 +46,8 @@ class DeleteReactionHandler(
                 updatedThemes,
             )
         } else {
-            val reaction = message.listOfReactions[reactuinNum]
-            val reactionAuthor = users.usersList.first { it.userId == reaction.author }
+            val reaction = findReactionInList(message, reactionNum)
+            val reactionAuthor = findFirstUserById(users, reaction.author)
             val reactionStruct = AuthorStructure(reaction, reactionAuthor.userName)
             val model = DeleteReactionDataVM(reactionStruct, true)
             createResult(Response(BAD_REQUEST).with(lens(request) of model))

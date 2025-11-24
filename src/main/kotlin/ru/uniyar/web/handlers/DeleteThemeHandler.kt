@@ -7,8 +7,11 @@ import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.with
 import ru.uniyar.authorization.Users
+import ru.uniyar.authorization.findFirstUserById
 import ru.uniyar.domain.AuthorStructure
 import ru.uniyar.domain.Themes
+import ru.uniyar.domain.fetchThemeByNumber
+import ru.uniyar.domain.removeTheme
 import ru.uniyar.web.models.DeleteThemeDataVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
@@ -24,17 +27,18 @@ class DeleteThemeHandler(
             lensOrNull(themeIdLens, request)
                 ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val theme =
-            themes.fetchThemeByNumber(themeId)
+            fetchThemeByNumber(themes, themeId)
                 ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val form = deleteLens(request)
-        return if (form.fields["agreement"]?.isNotEmpty() == true) {
-            val updatedThemes = themes.removeTheme(themeId)
+        val agreement = form.fields["agreement"]
+        return if (agreement != null && agreement.size > 0) {
+            val updatedThemes = removeTheme(themes, theme)
             createResultWithThemes(
                 Response(FOUND).header("Location", "/themes"),
                 updatedThemes,
             )
         } else {
-            val themeAuthor = users.usersList.first { it.userId == theme.theme.author }
+            val themeAuthor = findFirstUserById(users, theme.theme.author)
             val themeStruct = AuthorStructure(theme, themeAuthor.userName)
             val model = DeleteThemeDataVM(themeStruct, true)
             createResult(Response(BAD_REQUEST).with(lens(request) of model))

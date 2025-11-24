@@ -1,6 +1,5 @@
 package ru.uniyar.web.handlers
 
-import org.http4k.core.HttpHandler
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status
@@ -10,19 +9,23 @@ import org.http4k.core.with
 import ru.uniyar.authorization.JwtTools
 import ru.uniyar.authorization.Users
 import ru.uniyar.authorization.authUser
+import ru.uniyar.authorization.findUserByName
+import ru.uniyar.defaultAuthCookieExpiry
+import ru.uniyar.domain.Themes
 import ru.uniyar.web.models.AuthPageVM
 import ru.uniyar.web.templates.ContextAwareViewRender
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 class AuthorizationHandler(
-    val users: Users,
     val jwtTools: JwtTools,
     val lens: ContextAwareViewRender,
-) : HttpHandler {
-    override fun invoke(request: Request): Response {
+) : StateReadingHandler {
+    override fun invokeWithContext(
+        request: Request,
+        themes: Themes,
+        users: Users,
+    ): Response {
         val form = authFormLens(request)
-        if (form.errors.isNotEmpty()) {
+        if (isListNotEmpty(form.errors)) {
             val failures = formFailureInfoList(form.errors)
             val model = AuthPageVM(form, failures)
             return Response(Status.BAD_REQUEST).with(lens(request) of model)
@@ -31,21 +34,21 @@ class AuthorizationHandler(
         val pass = passField(form)
         if (!authUser(users, username, pass)) {
             val failures = formFailureInfoList(form.errors)
-            failures.add("Неверная информация в полях авторизации")
+            addFailureInList(failures, "Неверная информация в полях авторизации")
             val model = AuthPageVM(form, failures)
             return Response(Status.BAD_REQUEST).with(lens(request) of model)
         }
-        val user = users.findUserByName(username) ?: return Response(Status.OK)
+        val user = findUserByName(users, username) ?: return Response(Status.OK)
         if (user.role.name == "BANNED") {
             val failures = formFailureInfoList(form.errors)
-            failures.add("Данный пользователь находится в чёрном списке")
+            addFailureInList(failures, "Данный пользователь находится в чёрном списке")
             val model = AuthPageVM(form, failures)
             return Response(Status.BAD_REQUEST).with(lens(request) of model)
         }
         val token = jwtTools.createJWT(user.userId)
         if (token == null) {
             val failures = formFailureInfoList(form.errors)
-            failures.add("Произошла ошибка при авторизации. Попробуйте ещё раз")
+            addFailureInList(failures, "Произошла ошибка при авторизации. Попробуйте ещё раз")
             val model = AuthPageVM(form, failures)
             return Response(Status.BAD_REQUEST).with(lens(request) of model)
         }
@@ -54,7 +57,7 @@ class AuthorizationHandler(
             Cookie(
                 "auth",
                 token,
-                expires = Instant.now().plus(7, ChronoUnit.DAYS),
+                expires = defaultAuthCookieExpiry(),
                 httpOnly = true,
             ),
         )

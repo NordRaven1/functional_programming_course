@@ -7,8 +7,10 @@ import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.with
 import ru.uniyar.authorization.Users
-import ru.uniyar.domain.ThemeAndMessages
 import ru.uniyar.domain.Themes
+import ru.uniyar.domain.editTheme
+import ru.uniyar.domain.fetchThemeByNumber
+import ru.uniyar.domain.findThemeByNormalizedTitle
 import ru.uniyar.web.models.EditThemeDataVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
@@ -24,39 +26,29 @@ class EditThemeHandler(
             lensOrNull(themeIdLens, request)
                 ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val themeAndMessages =
-            themes.fetchThemeByNumber(themeId)
+            fetchThemeByNumber(themes, themeId)
                 ?: return createResult(Response(NOT_FOUND).with(lens(request) of errorModel))
         val form = themeFormLens(request)
-        if (form.errors.isNotEmpty()) {
+        if (isListNotEmpty(form.errors)) {
             val failures = formFailureInfoList(form.errors)
             val model = EditThemeDataVM(themeAndMessages.theme, form, failures)
             return createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
         val title = themeTitleField(form)
-        val themeCheck =
-            themes.themesList.find { allThemes ->
-                allThemes.theme.title.replace(" ", "")
-                    .equals(title.replace(" ", ""), true)
-            }
-        if (themeCheck == null || themeAndMessages.theme.title == title) {
+        val themeCheck = findThemeByNormalizedTitle(themes, title)
+        return if (themeCheck == null || themeAndMessages.theme.title == title) {
             val addingPossibility = themeAddingField(form)
             val adding = addingPossibility != null
-            val newTheme =
-                themeAndMessages.theme.copy(
-                    title = title,
-                    addPossibility = adding,
-                )
-            val newThemeAndMessages = ThemeAndMessages(newTheme, themeAndMessages.messages)
-            val updatedThemes = themes.replaceTheme(themeId, newThemeAndMessages)
-            return createResultWithThemes(
+            val updatedThemes = editTheme(themes, themeAndMessages, title, adding)
+            createResultWithThemes(
                 Response(FOUND).header("Location", "/themes/theme/$themeId"),
                 updatedThemes,
             )
         } else {
             val failures = formFailureInfoList(form.errors)
-            failures.add("Такая тема уже существует!")
+            addFailureInList(failures, "Такая тема уже существует!")
             val model = EditThemeDataVM(themeAndMessages.theme, form, failures)
-            return createResult(Response(BAD_REQUEST).with(lens(request) of model))
+            createResult(Response(BAD_REQUEST).with(lens(request) of model))
         }
     }
 }
