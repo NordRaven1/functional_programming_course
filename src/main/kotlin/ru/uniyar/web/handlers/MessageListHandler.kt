@@ -10,6 +10,7 @@ import ru.uniyar.authorization.Users
 import ru.uniyar.domain.Themes
 import ru.uniyar.domain.fetchThemeByNumber
 import ru.uniyar.domain.getMessagesPerPage
+import ru.uniyar.unsafeDateInFormat
 import ru.uniyar.web.models.MessageListPageVM
 import ru.uniyar.web.templates.ContextAwareViewRender
 
@@ -26,9 +27,24 @@ class MessageListHandler(
                 ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
         val theme = fetchThemeByNumber(themes, themeId) ?: return Response(NOT_FOUND).with(lens(request) of errorModel)
         val queries = request.uri.queries()
-        val mindate = parseDateFromQuery(queries, "mindate", "yyyy-MM-dd'T'HH:mm")
-        val maxdate = parseDateFromQuery(queries, "maxdate", "yyyy-MM-dd'T'HH:mm")
-        val pageNum = parsePageNumberFromQuery(queries)
+        val mindate = parseQueryParam(
+            queries = queries,
+            paramName = "mindate",
+            parser = { unsafeDateInFormat(it, "yyyy-MM-dd'T'HH:mm") },
+            default = null
+        )
+        val maxdate = parseQueryParam(
+            queries = queries,
+            paramName = "maxdate",
+            parser = { unsafeDateInFormat(it, "yyyy-MM-dd'T'HH:mm") },
+            default = null
+        )
+        val pageNum = parseQueryParam(
+            queries = queries,
+            paramName = "page",
+            parser = { it.toIntOrNull() },
+            default = 1
+        )
         val paginator = getMessagesPerPage(theme.messages, users, mindate, maxdate, pageNum, request.uri)
         val model = MessageListPageVM(paginator, mindate, maxdate, theme.theme.addPossibility, theme.theme)
         return Response(OK).with(lens(request) of model)

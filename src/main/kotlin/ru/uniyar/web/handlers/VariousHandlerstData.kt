@@ -149,12 +149,9 @@ fun formFailureInfo(failure: Failure): String {
 }
 
 fun formFailureInfoList(failures: List<Failure>): MutableList<String> {
-    val recommendations: MutableList<String> = mutableListOf()
-    for (failure in failures) {
-        recommendations.add(formFailureInfo(failure))
-    }
-    return recommendations
+    return failures.map(::formFailureInfo).toMutableList()
 }
+
 
 fun addFailureInList(
     failures: MutableList<String>,
@@ -179,27 +176,17 @@ fun formReactionList(
     users: Users,
     message: Message,
 ): MutableList<AuthorStructure<Reaction>> {
-    val reactions = mutableListOf<AuthorStructure<Reaction>>()
-    for (reaction in message.listOfReactions) {
-        val reactionAuthor = findFirstUserById(users, reaction.author)
-        reactions.add(AuthorStructure(reaction, reactionAuthor.userName))
-    }
-    return reactions
+    return message.listOfReactions.map { reaction ->
+        val author = findFirstUserById(users, reaction.author)
+        AuthorStructure(reaction, author.userName)
+    }.toMutableList()
 }
 
-fun parseDateFromQuery(
+fun <T> parseQueryParam(
     queries: Parameters,
     paramName: String,
-    pattern: String,
-): LocalDateTime? {
-    val value = queries.findSingle(paramName) ?: return null
-    return unsafeDateInFormat(value, pattern)
-}
-
-fun parsePageNumberFromQuery(queries: Parameters): Int {
-    return queries.findSingle("page")?.toIntOrNull() ?: 1
-}
-
-fun parseThemeNameFromQuery(queries: Parameters): String? {
-    return queries.findSingle("theme")
+    parser: (String) -> T?,
+    default: T,
+): T {
+    return queries.findSingle(paramName)?.let(parser) ?: default
 }

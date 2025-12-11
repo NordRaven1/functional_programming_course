@@ -47,43 +47,39 @@ fun createMessage(
     )
 }
 
-fun addReactionToMessage(
+fun updateMessage(
+    themes: Themes,
+    themeAndMessages: ThemeAndMessages,
     message: Message,
-    reaction: Reaction,
-): Message {
-    return message.copy(reactions = message.reactions + reaction)
-}
-
-fun removeReactionFromMessage(
-    message: Message,
-    index: Int,
-): Message {
-    val updatedReactions = message.reactions.filterIndexed { i, _ -> i != index }
-    return message.copy(reactions = updatedReactions)
+    update: (Message) -> Message
+): Themes {
+    val updatedMessage = update(message)
+    val updatedMessages = replaceMessageInList(themeAndMessages.messages, updatedMessage)
+    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
+    return replaceThemeInList(themes, updatedThemeAndMessages)
 }
 
 fun addNewReaction(
     themes: Themes,
     themeAndMessages: ThemeAndMessages,
-    message: Message,
+    messageToUpdate: Message,
     reactionType: Int,
     author: String,
 ): Themes {
     val newReaction = createReaction(reactionType, author)
-    val updatedMessage = addReactionToMessage(message, newReaction)
-    val updatedMessages = replaceMessageInList(themeAndMessages.messages, updatedMessage)
-    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
-    return replaceThemeInList(themes, updatedThemeAndMessages)
+    return updateMessage(themes, themeAndMessages, messageToUpdate, update = { message ->
+        message.copy(reactions = message.reactions + newReaction)
+    } )
 }
 
 fun deleteReaction(
     themes: Themes,
     themeAndMessages: ThemeAndMessages,
-    message: Message,
+    messageToUpdate: Message,
     reactionNum: Int,
 ): Themes {
-    val updatedMessage = removeReactionFromMessage(message, reactionNum)
-    val updatedMessages = replaceMessageInList(themeAndMessages.messages, updatedMessage)
-    val updatedThemeAndMessages = themeAndMessages.copy(messages = updatedMessages)
-    return replaceThemeInList(themes, updatedThemeAndMessages)
+    return updateMessage(themes, themeAndMessages, messageToUpdate, update = { message ->
+        val updatedReactions = message.reactions.filterIndexed { i, _ -> i != reactionNum }
+        message.copy(reactions = updatedReactions)
+    } )
 }

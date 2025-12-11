@@ -49,18 +49,20 @@ fun editUser(
     return users.copy(usersList = updatedList)
 }
 
-fun findUserByName(
+fun findUserBy(
     users: Users,
-    username: String,
+    value: String,
+    selector: (User) -> String,
 ): User? {
-    return users.usersList.find { it.userName == username }
+    return users.usersList.find { selector(it) == value }
 }
 
-fun findUserById(
-    users: Users,
-    id: String,
-): User? {
-    return users.usersList.find { it.userId == id }
+fun findUserByName(users: Users, username: String): User? {
+    return findUserBy(users, username, selector = { it.userName })
+}
+
+fun findUserById(users: Users, id: String): User? {
+    return findUserBy(users, id, selector = { it.userId })
 }
 
 fun findFirstUserById(
