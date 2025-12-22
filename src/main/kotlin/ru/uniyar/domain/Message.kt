@@ -47,6 +47,15 @@ fun createMessage(
     )
 }
 
+fun addReactionToMessage(reaction: Reaction): (Message) -> Message =
+    { message -> message.copy(reactions = message.reactions + reaction) }
+
+fun removeReactionFromMessage(index: Int): (Message) -> Message =
+    { message ->
+        val updatedReactions = message.reactions.filterIndexed { i, _ -> i != index }
+        message.copy(reactions = updatedReactions)
+    }
+
 fun updateMessage(
     themes: Themes,
     themeAndMessages: ThemeAndMessages,
@@ -67,9 +76,7 @@ fun addNewReaction(
     author: String,
 ): Themes {
     val newReaction = createReaction(reactionType, author)
-    return updateMessage(themes, themeAndMessages, messageToUpdate, update = { message ->
-        message.copy(reactions = message.reactions + newReaction)
-    } )
+    return updateMessage(themes, themeAndMessages, messageToUpdate, addReactionToMessage(newReaction) )
 }
 
 fun deleteReaction(
@@ -78,8 +85,5 @@ fun deleteReaction(
     messageToUpdate: Message,
     reactionNum: Int,
 ): Themes {
-    return updateMessage(themes, themeAndMessages, messageToUpdate, update = { message ->
-        val updatedReactions = message.reactions.filterIndexed { i, _ -> i != reactionNum }
-        message.copy(reactions = updatedReactions)
-    } )
+    return updateMessage(themes, themeAndMessages, messageToUpdate, removeReactionFromMessage(reactionNum) )
 }
